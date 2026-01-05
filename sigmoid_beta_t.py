@@ -5,6 +5,7 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 
 #Initial conditions (Normalized by N)
+#N is total population
 N = 1000
 S0 = 990/N
 E0 = 5/N
