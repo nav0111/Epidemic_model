@@ -263,7 +263,7 @@ def train_model_1a():
 #Training Model 1(b), sigmoid beta(t)
 def train_model_1b():
     print("Training Model 1(b): Beta(t) for sigmoid Function")
-    model = craete_sigmoid_beta_model()
+    model = create_sigmoid_beta_model()
     #The initial assumptions
     beta_min = torch.tensor([0.05], requires_grad = True)      
     beta_max = torch.tensor([0.5], requires_grad = True)
