@@ -160,6 +160,8 @@ plt.title('Beta(t) - Time-dependent Transmission Rate')
 plt.xlabel('Time in Days')
 plt.ylabel('Transmission Rate')
 plt.grid(True)
+
+
         
 
 
