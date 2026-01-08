@@ -28,7 +28,7 @@ def create_pinn_one_model():
         nn.Tanh(),
         nn.Linear(50,50),
         nn.Tanh(),
-        nn.Linear(50,50)
+        nn.Linear(50,50),
         nn.Tanh(),
         nn.Linear(50,8)
 
@@ -69,7 +69,7 @@ def ode_loss1(model, t_col):
 
     """
     t_col = t_col.clone().detach().requires_grad_(True)
-    out = create_pinn_one_model(t_col)
+    out = model(t_col)
     states = out[:, :7]
     raw_beta = out[:, 7]
     beta = torch.exp(raw_beta)
@@ -196,7 +196,7 @@ def ode_loss2(model, t_col, beta_min, beta_max, a, b):
 def ic_loss2(model, beta_min, beta_max, a, b):
     t_ic = torch.tensor([[0.0]], requires_grad = False)
     out = model(t_ic)
-    states_ic = out[:, 7].squeeze()
+    states_ic = out[:, :7].squeeze()
     #Extract initial values
     S_ic = states_ic[0]
     E_ic = states_ic[1]
@@ -219,7 +219,7 @@ def compute_grad_magnitude(loss, parameters):
        then compute gradients, some parameters might be None if parameter unused
     """
     params = list(parameters)
-    grads = torch.autograd.grad(loss, params, retain_graph = True, create_graph = False)
+    grads = torch.autograd.grad(loss, params, retain_graph = True, create_graph = False, allow_unused=True)
     grad_norms = []
     for grad in grads:
         if grad is not None:
@@ -289,11 +289,11 @@ def compute_smart_weights(ode_loss, ic_loss, con_loss, parameters, prev_weights,
         w_ic = alpha * weight_ic_b + (1-alpha) * prev_weights[1]
         w_con = alpha * weight_con_b + (1-alpha) * prev_weights[2]
 
-    return (w_ode, w_ic, weight_con), (grad_mag_ode.item(), grad_mag_ic.item(), grad_mag_con,item())
+    return (w_ode, w_ic, w_con), (grad_mag_ode.item(), grad_mag_ic.item(), grad_mag_con.item())
 
 #Training model 1
 def train_model1():
-    print("Training Model 1(a): Beta(t) from PINN")
+    print("Training Model 1: Beta(t) from PINN")
     model = create_pinn_one_model()
     optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
 
@@ -301,7 +301,236 @@ def train_model1():
     t_col = torch.rand(num_col,1) *T
 
     prev_weights = None
-    weight_hist = {}
+    weight_hist = {'ode': [], 'ic': [], 'con': []}
+    total_epochs = 10000
+
+    for epoch in range(total_epochs):
+        optimizer.zero_grad()
+        #compute loss
+        ode_loss, con_loss, beta = ode_loss1(model, t_col)
+        ic_loss = ic_loss1(model)
+        model_params = list(model.parameters())
+
+        #compute adaptive weights
+        weights, grad_mags = compute_smart_weights(ode_loss, ic_loss, con_loss, model_params,
+                                                   prev_weights, epoch, total_epochs, 
+                                                    epsilon = 1e-8)
+        
+        weight_ode, weight_ic, weight_con = weights
+        prev_weights = weights
+        weight_hist['ode'].append(weight_ode)
+        weight_hist['ic'].append(weight_ic)
+        weight_hist['con'].append(weight_con)
+
+        total_loss = weight_ode * ode_loss + weight_ic * ic_loss + weight_con * con_loss
+        total_loss.backward()
+        optimizer.step()
+
+        if epoch % 2000 == 0:
+            print(f"Epoch {epoch}:")
+            print(f" Loss ={total_loss.item():.5f}, ODE ={ode_loss.item():.5f}, IC ={ic_loss.item():.5f}, Con ={con_loss.item():.5f}")
+            print(f"Weights: ODE={weight_ode:.3f}, IC ={weight_ic:.3f}, con ={weight_con:.3f}")
+            print(f"Grad Magnitude: ODE = {grad_mags[0]:.6f}, IC ={grad_mags[1]:.6f}, Con = {grad_mags[2]:.6f}")
+    return model, weight_hist
+
+#Training model 2
+def train_model2():
+    print("Traning model 2: Beta(t) from sigmoid function")
+    model = create_pinn_two_model()
+
+    #Initial values
+    beta_min = torch.tensor([0.2], requires_grad = True)
+    beta_max = torch.tensor([0.8], requires_grad = True)
+    a = torch.tensor([-0.05], requires_grad = True)
+    b = torch.tensor([2.0], requires_grad = True)
+
+    optimizer = torch.optim.Adam(list(model.parameters()) + [beta_min, beta_max, a, b], lr =0.001)
+    num_col = 2000
+    t_col = torch.rand(num_col, 1) * T
+
+    prev_weights = None
+    weight_hist = {'ode': [], 'ic': [], 'con': []}
+    total_epochs = 10000
+
+    for epoch in range(total_epochs):
+        optimizer.zero_grad()
+
+        #compute losses
+        ode_loss, con_loss, beta = ode_loss2(model, t_col, beta_min, beta_max, a, b)
+        ic_loss = ic_loss2(model, beta_min, beta_max, a, b)
+
+        #parameters
+        all_params = list(model.parameters()) + [beta_min, beta_max, a, b]
+
+        weights, grad_mags = compute_smart_weights(ode_loss, ic_loss, con_loss, all_params, prev_weights,
+                                                   epoch, total_epochs, epsilon=1e-8)
+        
+        weight_ode, weight_ic, weight_con = weights
+        prev_weights = weights
+        
+        weight_hist['ode'].append(weight_ode)
+        weight_hist['ic'].append(weight_ic)
+        weight_hist['con'].append(weight_con)
+
+        total_loss = weight_ode * ode_loss + weight_ic * ic_loss + weight_con * con_loss
+        total_loss.backward()
+        optimizer.step()
+
+        if epoch % 2000 == 0:
+            print(f"Epoch {epoch}:")
+            print(f" Loss ={total_loss.item():.5f}, ODE ={ode_loss.item():.5f}, IC ={ic_loss.item():.5f}, Con ={con_loss.item():.5f}")
+            print(f"Weights: ODE={weight_ode:.3f}, IC ={weight_ic:.3f}, con ={weight_con:.3f}")
+            print(f"Grad Magnitude: ODE = {grad_mags[0]:.6f}, IC ={grad_mags[1]:.6f}, Con = {grad_mags[2]:.6f}")
+    return model, beta_min, beta_max, a, b, weight_hist
+
+#Train the models
+model_pinn, weight_hist_1 = train_model1()
+model_sigmoid, beta_min_new, beta_max_new, a_new, b_new, weight_hist_2 = train_model2()
+
+#Testing and plotting
+t_test = torch.linspace(0,T,200).reshape(-1,1)
+
+with torch.no_grad():
+    out_1 = model_pinn(t_test)
+    states_1 = out_1[:, :7].numpy()* N
+    raw_beta = out_1[:, 7].numpy()
+    beta_pinn = np.exp(raw_beta)
+
+with torch.no_grad():
+    out_sig = model_sigmoid(t_test)
+    states_2 = out_sig[:, :7].numpy() * N
+    beta_sigmoid = compute_sigmoid_beta(t_test, beta_min_new, beta_max_new, a_new, b_new).numpy()
+
+t_numpy = t_test.numpy().flatten()
+
+#Extraction of states
+#From model 1
+S_pinn = states_1[:,0]
+E_pinn = states_1[:,1]
+Iu_pinn = states_1[:,2]
+Ir_pinn = states_1[:, 3]
+H_pinn = states_1[:, 4]
+R_pinn = states_1[:, 5]
+D_pinn = states_1[:, 6]
+
+#From Model 2
+S_sigmoid = states_2[:,0]
+E_sigmoid = states_2[:,1]
+Iu_sigmoid = states_2[:,2]
+Ir_sigmoid = states_2[:, 3]
+H_sigmoid = states_2[:, 4]
+R_sigmoid = states_2[:, 5]
+D_sigmoid = states_2[:, 6]
+
+#Plot Susceptible
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, S_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, S_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Susceptible Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Plot Exposed
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, E_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, E_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Exposed Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Unreported Infected population
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, Iu_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, Iu_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Unreported Infected Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Reported Infected Population
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, Ir_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, Ir_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Reported Infected Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Hospitalized Population
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, H_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, H_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Hospitalized Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Recovered Population
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, R_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, R_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Recovered Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Deaths
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, D_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'blue')
+plt.plot(t_numpy, D_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, color = 'red')
+plt.title("Dead Population")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Number of People")
+plt.grid(True)
+plt.show()
+
+#Beta comparison
+plt.figure(figsize=(10,6))
+plt.plot(t_numpy, beta_pinn, label = "from Beta(t) with pinn", linewidth = 2.5, color = 'yellow')
+plt.plot(t_numpy, beta_sigmoid, label = "from Beta(t) with sigmoid", linewidth = 2.5, linestyle = '--', color = 'green')
+plt.title("Transmission Rate comparison")
+plt.legend()
+plt.xlabel("Days")
+plt.ylabel("Transmission Rate")
+plt.grid(True)
+plt.show()
+
+print("Model:1(a)")
+print(f"Beta range: {beta_pinn.min():.4f} to {beta_pinn.max():.4f}")
+print(f"Mean beta: {beta_pinn.mean():.4f}")
+
+print("Model:1(b)")
+print(f"Beta range: {beta_sigmoid.min():.4f} to {beta_sigmoid.max():.4f}")
+print(f"Mean beta: {beta_sigmoid.mean():.4f}")
+
+print("Learned Sigmoid Parameters")
+print(f"Beta_min={beta_min_new.item():.4f}")
+print(f"Beta_max={beta_max_new.item():.4f}")
+print(f"a={a_new.item():.4f}")
+print(f"b={b_new.item():.4f}")
+
+
+
+
+    
+        
+
+
 
 
 
