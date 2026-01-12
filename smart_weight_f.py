@@ -275,8 +275,8 @@ def compute_smart_weights(ode_loss, ic_loss, con_loss, parameters, prev_weights,
     #Conservation: min 5 max 50
     #.clamp is forcing to stay in the range
     weight_ode_b = torch.clamp(weight_ode, min =0.5, max =10).item()
-    weight_ic_b = torch.clamp(weight_ic, min =10, max=100).item()
-    weight_con_b = torch.clamp(weight_con, min = 5, max =50).item()
+    weight_ic_b = torch.clamp(weight_ic, min =1, max=100).item()
+    weight_con_b = torch.clamp(weight_con, min = 1, max =50).item()
 
     #Now we smooth the weights using exponential moving average
     #EMA prevents weights from reacting too violently to noisy gardients,and ensures stable and convergent pinn training
