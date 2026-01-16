@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.autograd as grad
 import matplotlib.pyplot as plt
+import pandas as pd
+df = pd.read_csv('/Users/srejon/Downloads/us_counties_covid19_daily.csv')
 
 #Initial Conditions, normalized by N
 N = 1000
