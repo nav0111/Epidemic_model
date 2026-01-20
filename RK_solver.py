@@ -8,7 +8,7 @@ startTime = 0
 endTime = 100
 timeSteps = 1000
 simulationTime = np.linspace(startTime, endTime, timeSteps)
-betaArray = 1.5*np.sin(simulationTime)
+betaArray = abs(1.5*np.sin(simulationTime))
 
 
 plt.plot(simulationTime, betaArray)
