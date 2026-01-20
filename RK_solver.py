@@ -20,7 +20,7 @@ plt.show()
 def seirStateSpaceModel(y,t,timePoints, sigma0, gamma0, betaArray):
     S, E, I =y
     beta_t = np.interp(t, timePoints, betaArray)
-    dSdt = beta_t *S*I /N
+    dSdt = -beta_t *S*I /N
     dEdt = beta_t *S *I /N - sigma0*E
     dIdt = sigma0*E - gamma0*I
     return [dSdt, dEdt, dIdt]
