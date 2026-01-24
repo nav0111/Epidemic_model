@@ -110,7 +110,7 @@ def ic_loss(model, S0, E0, Iu0, Ir0, H0, R0, D0, beta_min, beta_max,a,b):
     R_ic = y0_pred[:,5] 
     D_ic = y0_pred[:,6]
 
-    beta_ic = compute_sigmoid_beta(t0, beta_min, beta_max, a,b).detach().numpy().flatten()[0]
+    beta_ic = compute_sigmoid_beta(t0, beta_min, beta_max, a,b)
     #IC loss
     ic_loss = ((S_ic - S0)**2 + (E_ic - E0)**2 + (Iu_ic - Iu0)**2 + (Ir_ic - Ir0)**2 + 
                (H_ic - H0)**2 + (R_ic - R0)**2 + (D_ic - D0)**2)/7
