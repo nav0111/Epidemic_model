@@ -46,7 +46,7 @@ def ode_loss(model, t, sigma0, gamma_u0, gamma_r0, p0, h0, gamma_h0, mu0, N):
     H = y_pred[:, 4]
     R = y_pred[:, 5]
     D = y_pred[:, 6]
-    beta_t = torch.exp(y_pred[:, 7])  #for positive values
+    beta_t = torch.abs(y_pred[:, 7])  #for positive values
     
     # Compute derivatives
     dSdt = grad.grad(S, t, torch.ones_like(S), create_graph=True)[0]
@@ -166,7 +166,7 @@ def plot_results(model,t, N):
         H_pred = y_pred[:, 4] * N
         R_pred = y_pred[:, 5] * N
         D_pred = y_pred[:, 6] * N
-        beta_t = torch.exp(y_pred[:, 7])
+        beta_t = torch.abs(y_pred[:, 7])
 
     #plotting
     preds = [S_pred, E_pred, Iu_pred, Ir_pred, H_pred, R_pred, D_pred,
@@ -190,7 +190,11 @@ def plot_results(model,t, N):
             plt.ylabel("Population")
             plt.grid(True)
     plt.show()
-    return preds, labels
+    return preds
+
+#Output
+t_mod = train_pinn_model_one()
+plot_results(t_mod, t= torch.linspace(0,200,1000), N= 10000)
 
     
     
