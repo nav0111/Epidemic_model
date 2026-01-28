@@ -133,7 +133,7 @@ def train_pinn_model_two():
     mu0 = 0.02
 
     beta_min = torch.tensor([0.2], requires_grad = True)
-    beta_max = torch.tensor([0.8], requires_grad = True)
+    beta_max = torch.tensor([1.8], requires_grad = True)
     a = torch.tensor([-0.05], requires_grad = True)
     b = torch.tensor([2.0], requires_grad = True)
 
