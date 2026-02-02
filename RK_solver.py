@@ -9,16 +9,24 @@ import torch
 # import RK_solver
 
 
-def sigmoid(x, a, b):
+"""def sigmoid(x, a, b):
     x = np.asarray(x)
-    return 1 / (1 + np.exp(-a*(x-b)))
+    return 1 / (1 + np.exp(-a*(x-b)))"""
 
-def create_beta_array(time_domain):
+"""def create_beta_array(time_domain):
     a = 0.1 
     b = 0.5
     beta_min  = 0.1 
     beta_max = 1.1
     beta_array = beta_min + (beta_max - beta_min) * sigmoid(time_domain, a, b)
+    return beta_array"""
+
+def create_beta_array(time_domain):
+    beta_0 = 0.5
+    A = 0.15
+    T = 365
+    phi = 0
+    beta_array = beta_0 + A * np.sin(2 * np.pi * time_domain / T + phi)
     return beta_array
 
 def add_noise(data, noise_level):
@@ -41,7 +49,7 @@ def seirhrd_model(y,t,time_points, sigma0, gamma_u0, gamma_r0,p0,gamma_h0,mu0, b
     beta_t = np.interp(t,time_points, beta_array)
     dSdt = -beta_t * S * (I_u + I_r) /N
     dEdt = beta_t * S * (I_u + I_r) /N - sigma0*E
-    dI_udt = p0 * sigma0 * E - gamma_r0 * I_r
+    dI_udt = p0 * sigma0 * E - gamma_u0 * I_u
     dI_rdt = (1-p0) * sigma0 * E - gamma_h0 * I_r
     dHdt = gamma_h0 * I_r - gamma_u0 * H
     dRdt = gamma_u0 * H + gamma_r0 * I_r
@@ -89,7 +97,7 @@ def plot_solution(solutionState):
     plt.ylabel('population')
     plt.legend()
     plt.show()
-    plt.close()
+    #plt.close()
 
 
 
